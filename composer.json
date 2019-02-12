@@ -1,0 +1,27 @@
+{
+  "name": "setcooki/webhook-proxy",
+  "description": "A proxy forward for minio webhooks if your minio server and webhook target are on the same ip",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Frank Mueller",
+      "email": "set@cooki.me",
+      "homepage": "http://set.cooki.me",
+      "role": "Developer"
+    }
+  ],
+  "support": {
+      "issues": "https://github.com/setcooki/webhook-webhook/issues"
+  },
+  "config": {
+    "vendor-dir": "lib/vendor"
+  },
+  "require": {
+    "php": ">=7.1.2"
+  },
+  "autoload":{
+    "psr-4": {
+      "Setcooki\\Webhook\\Proxy\\": "src"
+    }
+  }
+}
