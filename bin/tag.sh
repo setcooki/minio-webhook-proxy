@@ -13,7 +13,6 @@ fi;
 
 git tag -a v$V -m "Version $V $M"
 git push --tags
-sh $DIR/version.sh
 composer update
 grunt dist
 sleep 5
