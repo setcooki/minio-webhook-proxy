@@ -1,6 +1,6 @@
 {
   "name": "setcooki/webhook-proxy",
-  "description": "A proxy forward for minio webhooks if your minio server and webhook target are on the same ip",
+  "description": "A webhhok proxy forward",
   "license": "MIT",
   "authors": [
     {
