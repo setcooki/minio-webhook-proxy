@@ -1,6 +1,6 @@
 {
   "name": "setcooki/webhook-proxy",
-  "description": "A webhhok proxy forward",
+  "description": "A webhook proxy forwarder",
   "license": "MIT",
   "authors": [
     {
@@ -11,7 +11,7 @@
     }
   ],
   "support": {
-      "issues": "https://github.com/setcooki/webhook-webhook/issues"
+      "issues": "https://github.com/setcooki/webhook-proxy/issues"
   },
   "config": {
     "vendor-dir": "lib/vendor"

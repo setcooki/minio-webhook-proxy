@@ -1,8 +1,8 @@
 # Webhook proxy
 
-_A proxy forward for webhooks_
+_A proxy forward for webhooks_... tbd
 
-**What does this plugin do?**
+**What does this package do?**
 
 ...tbd 
 

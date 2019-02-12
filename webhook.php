@@ -12,8 +12,7 @@ try
         &&
         ($config = json_decode($config, true)) !== null
     ){
-        $proxy = new \Setcooki\Webhook\Proxy\Proxy($config);
-        $proxy->execute();
+        echo (bool)(new \Setcooki\Webhook\Proxy\Proxy($config))->execute();
     }else{
         echo 'No config.json file found in current directory' . PHP_EOL;
         exit(1);
@@ -21,5 +20,6 @@ try
 }
 catch(\Exception $e)
 {
+    echo 0;
     error_log($e->getMessage());
 }

@@ -13,34 +13,73 @@ class Proxy
      */
     protected $config = null;
 
-    /*
-     *
+    /**
+     * @var bool
      */
     public $debug = false;
+
+    /**
+     * @var bool
+     */
+    public $log = false;
 
 
     /**
      * Proxy constructor.
      * @param $config
-     * @throws \Exception
      */
     public function __construct($config)
     {
+        $this->log = (isset($config['log'])) ? (bool)$config['log'] : false;
         $this->debug = (isset($config['debug'])) ? (bool)$config['debug'] : false;
         try
         {
+            $this->setup();
             $this->config = new Config($config);
             $this->checkServer();
             $this->checkConfig();
+            $this->checkEndpoints();
             $this->checkReferer();
             $this->checkToken();
         }
         catch(\Exception $e)
         {
+            if($this->log)
+            {
+                static::log('%s (%d)', [$e->getMessage(), $e->getCode()]);
+            }
             if($this->debug)
             {
-                $this->debug('%s (%d)', [$e->getMessage(), $e->getCode()]);
+                static::debug('%s (%d)', [$e->getMessage(), $e->getCode()]);
                 throw new $e;
+            }
+        }
+    }
+
+
+    /**
+     *
+     */
+    protected function setup()
+    {
+        $GLOBALS['webhook_proxy_debug'] = 0;
+        $GLOBALS['webhook_proxy_log'] = 0;
+
+        if($this->debug)
+        {
+            $GLOBALS['webhook_proxy_debug'] = 1;
+            error_reporting(E_ALL);
+            ini_set('display_errors', 1);
+        }
+        if($this->log)
+        {
+            $GLOBALS['webhook_proxy_log'] = 1;
+            $dir = dirname(__FILE__) . '/../logs';
+            if(!is_dir($dir))
+            {
+                mkdir($dir, 0755);
+            }else{
+                chmod($dir, 0775);
             }
         }
     }
@@ -73,6 +112,24 @@ class Proxy
     /**
      * @throws \Exception
      */
+    protected function checkEndpoints()
+    {
+        if($this->config->has('endpoints', true))
+        {
+            foreach($this->config->has('endpoints') as $endpoint)
+            {
+                if(!filter_var($endpoint, FILTER_VALIDATE_URL))
+                {
+                    throw new \Exception(sprintf('Endpoint: %s is not a valid url', $endpoint));
+                }
+            }
+        }
+    }
+
+
+    /**
+     * @throws \Exception
+     */
     protected function checkReferer()
     {
         if($this->config->has('referer', true))
@@ -80,7 +137,7 @@ class Proxy
             $ip = static::getRemoteAddr();
             if($ip === null || !in_array($ip, $this->config->get('referer')))
             {
-                throw new \Exception('Remote address is not a allowed');
+                throw new \Exception('Remote address is not allowed to use webhook');
             }
         }
     }
@@ -108,23 +165,38 @@ class Proxy
     protected function forward($data)
     {
         $i = 0;
+        $fp = null;
         $handles = [];
         $options = $this->curlOptions($this->config->get('curl', []));
+        if($this->debug)
+        {
+            $options[CURLOPT_VERBOSE] = true;
+            if($this->log)
+            {
+                $options[CURLOPT_STDERR] = fopen(dirname(__FILE__ . '/../logs/proxy.log'), 'a+');
+            }else{
+                $options[CURLOPT_STDERR] = $fp = fopen('php://temp', 'w+');
+            }
+        }
+
+        $mh = curl_multi_init();
         foreach($this->config->get('endpoints') as $endpoint)
         {
             $handles[$i] = curl_init();
             $options[CURLOPT_URL] = $endpoint;
             $options[CURLOPT_POSTFIELDS] = $data;
-            curl_setopt_array($handles[$i], $options);
+            $options[CURLOPT_HTTPHEADER] = ['Cache-Control: no-cache', 'Content-length: ' . strlen($data)];
+            foreach($options as $key => $val)
+            {
+                curl_setopt($handles[$i], $key, $val);
+            }
+            if($this->debug)
+            {
+                static::debug($options);
+            }
+            curl_multi_add_handle($mh, $handles[$i]);
             $i++;
         }
-
-        $mh = curl_multi_init();
-        foreach($handles as $handle)
-        {
-            curl_multi_add_handle($mh, $handle);
-        }
-
         $active = null;
         do{
             $mrc = curl_multi_exec($mh, $active);
@@ -137,17 +209,38 @@ class Proxy
             {
                 do{
                     $mrc = curl_multi_exec($mh, $active);
+                    if($mrc > 0)
+                    {
+                        $this->debug(sprintf('Curl error %s', curl_multi_strerror($mrc)));
+                    }
                 }
                 while ($mrc == CURLM_CALL_MULTI_PERFORM);
             }
         }
-
+        $errors = 0;
         foreach($handles as $handle)
         {
+            $error = curl_error($handle);
+            if(!empty($error))
+            {
+                $errors++;
+                if($fp)
+                {
+                    rewind($fp);
+                    static::log(stream_get_contents($fp));
+                }
+                static::log(sprintf('%s (%d)', $error, curl_errno($handle)));
+            }else{
+                if($this->debug)
+                {
+                    static::debug(curl_getinfo($handle));
+                    static::debug(curl_multi_getcontent($handle));
+                }
+            }
             curl_multi_remove_handle($mh, $handle);
         }
         curl_multi_close($mh);
-        return true;
+        return ($errors) ? false : true;
     }
 
 
@@ -161,11 +254,15 @@ class Proxy
         {
             $data = file_get_contents("php://input");
         }
+        if($this->debug)
+        {
+            static::debug($data);
+        }
         if(!empty($data))
         {
             return $this->forward($data);
         }else{
-            if($this->debug){ $this->debug('No post data to forward found'); }
+            if($this->debug){ static::debug('No post data to forward found'); }
         }
         return false;
     }
@@ -177,16 +274,44 @@ class Proxy
      */
     public static function debug($message, Array $args = null)
     {
+        if(is_array($message) || is_object($message))
+        {
+            $message = json_encode($message);
+        }
         if($args !== null)
         {
             $message = vsprintf($message, $args);
         }
-        if(strtolower(php_sapi_name()) === 'cli')
+        if(array_key_exists('webhook_proxy_debug', $GLOBALS) && $GLOBALS['webhook_proxy_debug'] === 1)
         {
-            echo $message . PHP_EOL;
+            static::log($message, $args);
         }else{
-            echo sprintf('<pre>%s</pre>', $message);
+            if(strtolower(php_sapi_name()) === 'cli')
+            {
+                echo $message . PHP_EOL;
+            }else{
+                echo sprintf('<pre>%s</pre>', $message);
+            }
         }
+    }
+
+
+    /**
+     * @param $message
+     * @param array|null $args
+     */
+    public static function log($message, Array $args = null)
+    {
+        if(is_array($message) || is_object($message))
+        {
+            $message = json_encode($message);
+        }
+        if($args !== null)
+        {
+            $message = vsprintf($message, $args);
+        }
+        $message = sprintf('[%s] %s', strftime('%D %T', time()), $message);
+        file_put_contents(dirname(__FILE__) . '/../logs/proxy.log', "$message\n", FILE_APPEND);
     }
 
 
@@ -194,13 +319,14 @@ class Proxy
      * @param array|null $options
      * @return array
      */
-    public function curlOptions(Array $options = null)
+    protected function curlOptions(Array $options = null)
     {
         return
         ([
+            CURLOPT_HEADER => true,
             CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_TIMEOUT => 100,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_TIMEOUT => 60,
+            CURLINFO_HEADER_OUT => true,
             CURLOPT_RETURNTRANSFER => true
         ] + (array)$options);
     }

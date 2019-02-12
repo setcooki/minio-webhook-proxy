@@ -1,5 +1,6 @@
 {
-  "debug": true,
+  "debug": false,
+  "log": false,
   "referer": ["213.252.188.26"],
   "token": "7zGFVX6XrpuP0FlweWBSa0zwxjJHT5Oe",
   "endpoints": ["http://my.endpoint.com"]
