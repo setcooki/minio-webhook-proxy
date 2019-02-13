@@ -1,5 +1,7 @@
 <?php
 
+error_reporting(E_ALL);
+
 try
 {
     require_once dirname(__FILE__) . '/lib/vendor/autoload.php';
@@ -14,12 +16,12 @@ try
     ){
         echo (bool)(new \Setcooki\Webhook\Proxy\Proxy($config))->execute();
     }else{
-        echo 'No config.json file found in current directory' . PHP_EOL;
+        echo 'No config.json file found in current directory or unable to decode' . PHP_EOL;
         exit(1);
     }
 }
 catch(\Exception $e)
 {
+    \Setcooki\Webhook\Proxy\Proxy::log($e);
     echo 0;
-    error_log($e->getMessage());
 }

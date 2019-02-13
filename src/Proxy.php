@@ -34,8 +34,8 @@ class Proxy
         $this->debug = (isset($config['debug'])) ? (bool)$config['debug'] : false;
         try
         {
-            $this->setup();
             $this->config = new Config($config);
+            $this->setup();
             $this->checkServer();
             $this->checkConfig();
             $this->checkEndpoints();
@@ -46,7 +46,7 @@ class Proxy
         {
             if($this->log)
             {
-                static::log('%s (%d)', [$e->getMessage(), $e->getCode()]);
+                static::log($e);
             }
             if($this->debug)
             {
@@ -168,12 +168,13 @@ class Proxy
         $fp = null;
         $handles = [];
         $options = $this->curlOptions($this->config->get('curl', []));
+
         if($this->debug)
         {
             $options[CURLOPT_VERBOSE] = true;
             if($this->log)
             {
-                $options[CURLOPT_STDERR] = fopen(dirname(__FILE__ . '/../logs/proxy.log'), 'a+');
+                $options[CURLOPT_STDERR] = @fopen(dirname(__FILE__ . '/../logs/proxy.log'), 'a+');
             }else{
                 $options[CURLOPT_STDERR] = $fp = fopen('php://temp', 'w+');
             }
@@ -302,16 +303,25 @@ class Proxy
      */
     public static function log($message, Array $args = null)
     {
-        if(is_array($message) || is_object($message))
+        $dir = dirname(__FILE__) . '/../logs/';
+
+        if($message instanceof \Exception)
         {
+            $message = sprintf('%s (%d)', $message->getMessage(), $message->getLine());
+        }else if(is_array($message) || is_object($message)){
             $message = json_encode($message);
         }
         if($args !== null)
         {
             $message = vsprintf($message, $args);
         }
-        $message = sprintf('[%s] %s', strftime('%D %T', time()), $message);
-        file_put_contents(dirname(__FILE__) . '/../logs/proxy.log', "$message\n", FILE_APPEND);
+        if(is_dir($dir) && is_writable($dir))
+        {
+            $message = sprintf('[%s] %s', strftime('%D %T', time()), $message);
+            file_put_contents(dirname(__FILE__) . '/../logs/proxy.log', "$message\n", FILE_APPEND);
+        }else{
+            error_log($message);
+        }
     }
 
 
@@ -323,11 +333,14 @@ class Proxy
     {
         return
         ([
+            CURLOPT_VERBOSE => true,
             CURLOPT_HEADER => true,
             CURLOPT_CUSTOMREQUEST => 'POST',
             CURLOPT_TIMEOUT => 60,
             CURLINFO_HEADER_OUT => true,
-            CURLOPT_RETURNTRANSFER => true
+            CURLOPT_RETURNTRANSFER => true,
+            CURLINFO_HEADER_OUT => true,
+            CURLOPT_SSL_VERIFYPEER >= false
         ] + (array)$options);
     }
 

@@ -1,17 +1,37 @@
 # Webhook proxy
 
-_A proxy forward for webhooks_... tbd
+_A proxy forwarder for generic post webhooks_
 
 **What does this package do?**
 
-...tbd 
+Suppose a webhook sender (like. Gitlab, Slack, Minio, ...) can not send directly to your webhook target or want to
+forward the webhook event to multiple targets you may find this package interesting.
+
+The proxy will forward the post request to any configured endpoint. Since it uses PHP CURL you can customize
+the curl request with your own curl options  
+
 
 ## 1. Usage
 
-Download plugin .zip from `/dist` folder and install with wordpress
+Install package with composer or download `dist.zip` and use it.
 
-## 2. Development
 
+## 2. Configure
+
+In order to configure the proxy you need to create a `config.json` file in the package root directory.
+The following options exist:
+
+- `debug=<true>|<false>`: enable debug mode
+- `log=<true>|<false>`: enable logging (the proxy will try to log into `./logs/*` or use `error_log()`)
+- `referer=<array>`: array or allowed remote addr referer IP´s
+- `token=<string>`: the token must be added in the webhook request
+- `endpoints=<array>`: array or endpoints to forward to
+- `curl=<array>`: array of additional curl options
+
+The only mandatory option is: `endpoints`
+
+
+## 3. Development
 
 1. clone repo
 2. do a `npm install` for dependencies
